@@ -19,7 +19,8 @@ import {
   Brain,
   User,
   Search,
-  Code2
+  Code2,
+  MapPin
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -227,6 +228,14 @@ export default function Navbar() {
             >
               <Search className="w-3.5 h-3.5 text-cyan-500" />
               <span>CSE Search</span>
+            </Link>
+
+            <Link
+              href="/map"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:text-orange-600 dark:hover:text-white hover:bg-white dark:hover:bg-white/10 transition"
+            >
+              <MapPin className="w-3.5 h-3.5 text-rose-500" />
+              <span>Campus Map</span>
             </Link>
 
             <Link
