@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export function usePomodoroSync(roomId: string) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   
   // Default 25-minute sprint (1500 seconds)
   const [timeLeft, setTimeLeft] = useState<number>(1500);
