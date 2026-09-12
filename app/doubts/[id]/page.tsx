@@ -1,210 +1,304 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import AskQuestionModal from '@/components/AskQuestionModal';
-import { Plus, CheckCircle2, Sparkles, Filter, RefreshCw, Search, ChevronRight, Flame } from 'lucide-react';
+import {
+  Sparkles,
+  Check,
+  ShieldCheck,
+  CornerDownRight,
+  ArrowLeft,
+  MessageSquare,
+  Flame,
+  CheckCircle2,
+  Calendar,
+  Send,
+  Code2
+} from 'lucide-react';
 
-const COURSES = ['ALL', 'CSE205', 'INT219', 'MTH166', 'CSE316', 'CHE110', 'PHY109'];
-
-export default function DoubtsPage() {
+export default function DoubtDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const questionId = params?.id as string;
   const supabase = createClient();
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [filterCourse, setFilterCourse] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [minBounty, setMinBounty] = useState(20);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  const fetchQuestions = async () => {
+  const [question, setQuestion] = useState<any>(null);
+  const [answers, setAnswers] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [newAnswer, setNewAnswer] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadData = async () => {
+    if (!questionId) return;
     setLoading(true);
+    setErrorMsg(null);
+
     try {
-      let query = supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+
+      // 1. Fetch Question
+      const { data: qData, error: qError } = await supabase
         .from('questions')
         .select('*')
-        .order('created_at', { ascending: false });
+        .eq('id', questionId)
+        .single();
 
-      if (filterCourse !== 'ALL') {
-        query = query.eq('course_code', filterCourse);
+      if (qError) throw qError;
+      setQuestion(qData);
+
+      // 2. Fetch Answers
+      const { data: aData, error: aError } = await supabase
+        .from('answers')
+        .select('*')
+        .eq('question_id', questionId)
+        .order('is_accepted', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (aError) {
+        console.warn('Answers fetch warning:', aError);
+      } else {
+        setAnswers(aData || []);
       }
-
-      const { data } = await query;
-      if (data) setQuestions(data);
-    } catch (err) {
-      console.error('Fetch error:', err);
+    } catch (err: any) {
+      console.error('Error loading question:', err);
+      setErrorMsg(err.message || 'Failed to load question details.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchQuestions();
-  }, [filterCourse]);
+    loadData();
+  }, [questionId]);
 
-  // Client-side Instant Filter & Search
-  const filteredQuestions = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesSearch =
-        q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        q.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        q.course_code.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesBounty = q.bounty >= minBounty;
-      return matchesSearch && matchesBounty;
-    });
-  }, [questions, searchQuery, minBounty]);
+  // Post Solution Action
+  const handlePostAnswer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnswer.trim()) return;
+    setIsSubmitting(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('Please Sign In first from the top navbar to post an answer.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const { error } = await supabase.from('answers').insert({
+        question_id: questionId,
+        user_id: user.id,
+        body: newAnswer.trim(),
+      });
+
+      if (error) throw error;
+      setNewAnswer('');
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Error submitting answer');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Accept Solution Action (Atomic Bounty Transfer via RPC)
+  const handleAcceptAnswer = async (answerId: string) => {
+    if (!confirm('Accept this solution and transfer the bounty credits to this student?')) return;
+
+    try {
+      const { error } = await supabase.rpc('accept_solution', {
+        p_question_id: questionId,
+        p_answer_id: answerId,
+      });
+
+      if (error) throw error;
+      alert('🎉 Solution accepted! Bounty credits transferred.');
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to accept solution');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-20 text-center space-y-3">
+        <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin mx-auto" />
+        <p className="text-xs text-zinc-500 font-medium">Loading doubt details from Supabase...</p>
+      </div>
+    );
+  }
+
+  if (errorMsg || !question) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-16 text-center space-y-4">
+        <div className="p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 space-y-2">
+          <p className="font-bold text-sm">Could not find this question.</p>
+          <p className="text-xs text-zinc-400">{errorMsg || 'This question may have been deleted.'}</p>
+        </div>
+        <Link
+          href="/doubts"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-bold hover:bg-zinc-700 transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Doubts Marketplace
+        </Link>
+      </div>
+    );
+  }
+
+  const isAuthor = currentUserId === question.user_id;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
       
-      {/* Header Banner with Glow */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 p-8 rounded-3xl bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/20 backdrop-blur-2xl relative overflow-hidden shadow-2xl">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-400 text-xs font-black uppercase">
-            <Flame className="w-3.5 h-3.5 text-orange-400" />
-            LPU Doubt Marketplace
+      {/* Back Button */}
+      <Link
+        href="/doubts"
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 text-xs font-bold transition"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" /> Back to Doubts
+      </Link>
+
+      {/* Main Question Card */}
+      <div className="p-8 rounded-3xl bg-white dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10 shadow-xl space-y-6">
+        
+        {/* Top Meta */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="px-3 py-1 rounded-xl text-xs font-black bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30">
+              {question.course_code}
+            </span>
+
+            {question.is_solved ? (
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Solved
+              </span>
+            ) : (
+              <span className="text-xs text-amber-500 font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20">
+                ● Open Bounty
+              </span>
+            )}
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Academic Bounty Exchange
-          </h1>
-          <p className="text-zinc-400 text-xs sm:text-sm max-w-lg">
-            Solve peers’ problems to earn bounties, or spend credits to get verified answers with code blocks.
-          </p>
+
+          <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-xs font-black shadow-inner">
+            <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+            <span>Bounty: +{question.bounty} 🪙</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchQuestions}
-            className="p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/10 text-zinc-300 transition"
-            title="Refresh feed"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-400' : ''}`} />
-          </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:opacity-95 text-white font-black text-sm shadow-xl shadow-orange-600/30 transition hover:scale-105"
-          >
-            <Plus className="w-4 h-4" />
-            Ask Doubt (-20 🪙)
-          </button>
+        {/* Title */}
+        <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white leading-tight">
+          {question.title}
+        </h1>
+
+        {/* Question Body / Code Block */}
+        <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 font-mono text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap overflow-x-auto">
+          {question.body}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-zinc-400 pt-2 border-t border-zinc-100 dark:border-white/5">
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Posted on {new Date(question.created_at).toLocaleDateString()}</span>
         </div>
       </div>
 
-      {/* Dynamic Search & Bounty Filter Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Search Input */}
-        <div className="md:col-span-2 relative">
-          <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search doubts by title, keyword, or course code..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white/[0.03] border border-white/10 text-white text-xs placeholder:text-zinc-500 focus:outline-none focus:border-orange-500 transition"
-          />
-        </div>
-
-        {/* Min Bounty Filter Slider */}
-        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-4 px-4">
-          <span className="text-xs font-bold text-zinc-400 shrink-0">Min Bounty:</span>
-          <input
-            type="range"
-            min={20}
-            max={100}
-            step={5}
-            value={minBounty}
-            onChange={(e) => setMinBounty(Number(e.target.value))}
-            className="w-full accent-orange-500 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-          />
-          <span className="text-xs font-mono font-black text-amber-400 shrink-0">+{minBounty} 🪙</span>
-        </div>
-      </div>
-
-      {/* Course Code Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <Filter className="w-4 h-4 text-zinc-500 mr-2 shrink-0" />
-        {COURSES.map((code) => (
-          <button
-            key={code}
-            onClick={() => setFilterCourse(code)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
-              filterCourse === code
-                ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg shadow-orange-600/20 scale-105'
-                : 'bg-white/[0.03] text-zinc-400 border border-white/5 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {code}
-          </button>
-        ))}
-      </div>
-
-      {/* Questions Feed */}
+      {/* Answers Section */}
       <div className="space-y-4">
-        {filteredQuestions.map((q) => (
-          <Link
-            href={`/doubts/${q.id}`}
-            key={q.id}
-            className="block p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-orange-500/50 hover:bg-white/[0.04] transition duration-300 shadow-xl group relative overflow-hidden"
-          >
-            <div className="flex items-start justify-between gap-6">
-              <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-2.5">
-                  <span className="px-3 py-1 rounded-lg text-xs font-black bg-orange-500/15 text-orange-400 border border-orange-500/30">
-                    {q.course_code}
-                  </span>
-                  {q.is_solved ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Solved
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-xs text-amber-400 font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-md border border-amber-500/20">
-                      ● Open Bounty
-                    </span>
-                  )}
-                  <span className="text-xs text-zinc-500 font-mono">
-                    {new Date(q.created_at).toLocaleDateString()}
-                  </span>
-                </div>
+        <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-orange-500" />
+          Answers ({answers.length})
+        </h2>
 
-                <h2 className="text-xl font-bold text-white group-hover:text-orange-400 transition">
-                  {q.title}
-                </h2>
-                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">{q.body}</p>
-              </div>
-
-              {/* Glowing Bounty Badge */}
-              <div className="flex flex-col items-end gap-3 shrink-0">
-                <div className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-transparent border border-amber-500/40 text-amber-300 text-sm font-black shadow-lg shadow-amber-500/10">
-                  <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-                  <span>+{q.bounty} 🪙</span>
-                </div>
-                <div className="text-zinc-500 group-hover:text-orange-400 transition flex items-center text-xs font-bold">
-                  <span>Solve & Earn</span>
-                  <ChevronRight className="w-4 h-4 ml-0.5" />
-                </div>
-              </div>
-            </div>
-          </Link>
-        ))}
-
-        {!loading && filteredQuestions.length === 0 && (
-          <div className="text-center py-20 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
-            <p className="text-zinc-500 text-sm">No doubts match your search filter.</p>
-            <button
-              onClick={() => { setSearchQuery(''); setFilterCourse('ALL'); }}
-              className="mt-3 text-xs text-orange-400 font-bold hover:underline"
-            >
-              Reset Filters
-            </button>
+        {answers.length === 0 && (
+          <div className="text-center py-12 rounded-3xl border border-dashed border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/[0.01] p-6 space-y-2">
+            <p className="text-xs font-semibold text-zinc-500">No solutions submitted yet.</p>
+            <p className="text-[11px] text-zinc-400">Be the first to solve this doubt and claim the <strong className="text-amber-500 font-bold">+{question.bounty} 🪙 bounty</strong>!</p>
           </div>
         )}
+
+        {answers.map((ans) => (
+          <div
+            key={ans.id}
+            className={`p-6 rounded-3xl border transition shadow-lg space-y-4 ${
+              ans.is_accepted
+                ? 'bg-emerald-500/[0.04] border-emerald-500/40 shadow-emerald-500/5'
+                : 'bg-white dark:bg-white/[0.02] border-zinc-200 dark:border-white/10'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                  Student Solution
+                </span>
+                <span className="text-[10px] text-zinc-400">
+                  • {new Date(ans.created_at).toLocaleDateString()}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {ans.is_accepted && (
+                  <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                    <ShieldCheck className="w-4 h-4" /> Accepted Solution
+                  </span>
+                )}
+
+                {/* Author-only Accept Button */}
+                {isAuthor && !question.is_solved && !ans.is_accepted && (
+                  <button
+                    onClick={() => handleAcceptAnswer(ans.id)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-md transition hover:scale-105"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Accept Solution (+{question.bounty} 🪙)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Answer Content */}
+            <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 font-mono text-xs sm:text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+              {ans.body}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <AskQuestionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={fetchQuestions}
-      />
+      {/* Post Your Answer Box */}
+      <form onSubmit={handlePostAnswer} className="p-6 rounded-3xl bg-white dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10 shadow-xl space-y-4">
+        <h3 className="text-sm font-black text-zinc-900 dark:text-white flex items-center gap-2">
+          <CornerDownRight className="w-4 h-4 text-orange-500" />
+          Write Your Solution (Code & Markdown Supported)
+        </h3>
+
+        <textarea
+          rows={5}
+          required
+          placeholder="Provide step-by-step logic and paste working code snippets..."
+          value={newAnswer}
+          onChange={(e) => setNewAnswer(e.target.value)}
+          className="w-full p-4 rounded-2xl bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white text-xs sm:text-sm placeholder:text-zinc-400 focus:outline-none focus:border-orange-500 font-mono"
+        />
+
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-[11px] text-zinc-500 flex items-center gap-1 font-medium">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            Bounty will be awarded if the author accepts your solution.
+          </span>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white font-black text-xs shadow-lg shadow-orange-600/25 transition hover:scale-105"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {isSubmitting ? 'Posting Solution...' : 'Post Solution'}
+          </button>
+        </div>
+      </form>
+
     </div>
   );
 }

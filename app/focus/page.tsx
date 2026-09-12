@@ -7,7 +7,6 @@ import {
   Pause,
   RotateCcw,
   Sparkles,
-  Youtube,
   CheckSquare,
   Square,
   Plus,
