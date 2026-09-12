@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import BackgroundDesign from '@/components/BackgroundDesign';
+import NexusAICopilot from '@/components/NexusAICopilot';
 
 const jakarta = Plus_Jakarta_Sans({ 
   subsets: ['latin'],
@@ -28,6 +29,9 @@ export default function RootLayout({
         
         <Navbar />
         <main className="relative z-10">{children}</main>
+
+        {/* Global Floating AI Copilot & Exam Quizzer */}
+        <NexusAICopilot />
       </body>
     </html>
   );
