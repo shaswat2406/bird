@@ -14,6 +14,7 @@ import {
   Coffee,
   Brain,
   Music,
+  Youtube,
   ExternalLink,
   Volume2,
   Tv
