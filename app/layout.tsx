@@ -4,6 +4,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import BackgroundDesign from '@/components/BackgroundDesign';
 import NexusAICopilot from '@/components/NexusAICopilot';
+import CursorSpotlight from '@/components/CursorSpotlight';
 
 const jakarta = Plus_Jakarta_Sans({ 
   subsets: ['latin'],
@@ -26,6 +27,9 @@ export default function RootLayout({
       <body className={`${jakarta.className} antialiased selection:bg-orange-500/30 selection:text-orange-300 relative transition-colors duration-300 min-h-screen`}>
         {/* Dynamic Multi-Layer Background Graphic Architecture */}
         <BackgroundDesign />
+        
+        {/* Interactive Smooth Cursor Spotlight Glow */}
+        <CursorSpotlight />
         
         <Navbar />
         <main className="relative z-10">{children}</main>
