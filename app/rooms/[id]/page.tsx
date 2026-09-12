@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { usePomodoroSync } from '@/hooks/usePomodoroSync';
+import { getRoomTheme } from '@/app/rooms/page';
 import {
   Mic,
   MicOff,
@@ -398,12 +399,19 @@ export default function VideoStudyRoomPage() {
   };
 
   const courseCodeFormatted = roomId.split('-')[0]?.toUpperCase() || 'STUDY';
+  const theme = getRoomTheme(roomId);
+  const IconComp = theme.icon;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-[#06070a] text-white overflow-hidden">
+    <div className={`h-[calc(100vh-4rem)] flex flex-col bg-gradient-to-b ${theme.bgGradient} text-white overflow-hidden relative`}>
+      {/* Dynamic Background SVG Watermark */}
+      <div
+        dangerouslySetInnerHTML={{ __html: theme.watermarkPattern }}
+        className="pointer-events-none opacity-20 absolute -right-10 -bottom-10 w-96 h-96"
+      />
       
       {/* Top HUD Bar */}
-      <div className="h-16 border-b border-white/5 bg-[#0b0d14]/80 backdrop-blur-xl px-6 flex items-center justify-between shrink-0">
+      <div className="h-16 border-b border-white/10 bg-[#0b0d14]/85 backdrop-blur-2xl px-6 flex items-center justify-between shrink-0 z-20">
         
         {/* Left: Exit to Lobby & Room Info */}
         <div className="flex items-center gap-4">
@@ -419,11 +427,15 @@ export default function VideoStudyRoomPage() {
           <div className="h-4 w-px bg-white/10 hidden sm:block" />
 
           <div className="flex items-center gap-2.5">
-            <span className="px-3 py-1 rounded-xl text-xs font-black bg-orange-500/20 text-orange-400 border border-orange-500/30 uppercase">
-              {courseCodeFormatted}
+            <span className={`px-3 py-1 rounded-xl text-xs font-black border flex items-center gap-1.5 ${theme.badgeBg}`}>
+              <IconComp className="w-3.5 h-3.5" />
+              <span>{courseCodeFormatted}</span>
             </span>
             <div className="hidden md:block">
-              <h1 className="font-bold text-xs sm:text-sm text-zinc-100">Live Video Study Room</h1>
+              <h1 className="font-bold text-xs sm:text-sm text-zinc-100 flex items-center gap-1.5">
+                <span>{roomId}</span>
+                <span className="text-[10px] text-zinc-400 font-mono">({theme.badgeText.split(' ')[1] || 'Study'})</span>
+              </h1>
               <p className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 {participants.length} Studiers Connected
