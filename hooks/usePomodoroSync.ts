@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 export function usePomodoroSync(roomId: string) {
   const supabase = useMemo(() => createClient(), []);
   
-  // Default 25-minute sprint (1500 seconds)
+  // Customizable sprint duration (default: 25 minutes = 1500 seconds)
+  const [totalDuration, setTotalDuration] = useState<number>(1500);
   const [timeLeft, setTimeLeft] = useState<number>(1500);
   const [pomodoroState, setPomodoroState] = useState<'FOCUS' | 'BREAK'>('FOCUS');
   const [isCompleted, setIsCompleted] = useState(false);
@@ -35,6 +36,7 @@ export function usePomodoroSync(roomId: string) {
     const channel = supabase.channel(`timer_sync:${roomId}`);
 
     channel.on('broadcast', { event: 'timer_reset' }, ({ payload }: any) => {
+      setTotalDuration(payload.seconds);
       setTimeLeft(payload.seconds);
       setPomodoroState(payload.state);
       setIsRunning(true);
@@ -49,15 +51,16 @@ export function usePomodoroSync(roomId: string) {
     };
   }, [roomId, supabase]);
 
-  // 3. Start 25m Focus Sprint
+  // 3. Start Custom Focus Sprint (customizable seconds)
   const startFocusSprint = useCallback((seconds = 1500) => {
+    setTotalDuration(seconds);
     setTimeLeft(seconds);
     setPomodoroState('FOCUS');
     setIsRunning(true);
     setIsCompleted(false);
     rewardedRef.current = false;
 
-    // Broadcast new timer state to everyone in the room
+    // Broadcast new custom timer state to everyone in the room
     const channel = supabase.channel(`timer_sync:${roomId}`);
     channel.send({
       type: 'broadcast',
@@ -66,8 +69,9 @@ export function usePomodoroSync(roomId: string) {
     });
   }, [roomId, supabase]);
 
-  // 4. Start 5m Break
+  // 4. Start Custom Break (customizable seconds)
   const startBreak = useCallback((seconds = 300) => {
+    setTotalDuration(seconds);
     setTimeLeft(seconds);
     setPomodoroState('BREAK');
     setIsRunning(true);
@@ -81,7 +85,7 @@ export function usePomodoroSync(roomId: string) {
     });
   }, [roomId, supabase]);
 
-  // 5. Claim +5 Focus Reward
+  // 5. Claim Focus Reward
   const claimReward = useCallback(async () => {
     if (rewardedRef.current || pomodoroState !== 'FOCUS') return;
 
@@ -98,6 +102,7 @@ export function usePomodoroSync(roomId: string) {
 
   return {
     timeLeft,
+    totalDuration,
     pomodoroState,
     isCompleted,
     isRunning,
@@ -106,7 +111,7 @@ export function usePomodoroSync(roomId: string) {
     claimReward,
     room: {
       pomodoro_state: pomodoroState,
-      cycle_duration_seconds: pomodoroState === 'FOCUS' ? 1500 : 300,
+      cycle_duration_seconds: totalDuration,
     },
   };
 }

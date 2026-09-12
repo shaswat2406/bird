@@ -23,7 +23,11 @@ import {
   Maximize2,
   Minimize2,
   FileUp,
-  X
+  X,
+  Sliders,
+  Settings,
+  Bell,
+  Check
 } from 'lucide-react';
 
 interface TodoTask {
@@ -96,10 +100,34 @@ export default function SoloFocusPage() {
 
   // Mode: Focus vs Break
   const [mode, setMode] = useState<'FOCUS' | 'SHORT_BREAK' | 'LONG_BREAK'>('FOCUS');
-  const [duration, setDuration] = useState(1500); // 25 mins
-  const [timeLeft, setTimeLeft] = useState(1500);
+  const [focusMinutes, setFocusMinutes] = useState(25);
+  const [shortBreakMinutes, setShortBreakMinutes] = useState(5);
+  const [longBreakMinutes, setLongBreakMinutes] = useState(15);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [duration, setDuration] = useState(25 * 60);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [completedSessions, setCompletedSessions] = useState(0);
+
+  // Web Audio Completion Chime
+  const playCompletionChime = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.25); // A5
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.7);
+    } catch {}
+  };
 
   // Right Panel Tab: 'media' (YouTube) vs 'pdf' (PDF Document Reader)
   const [rightPanelTab, setRightPanelTab] = useState<'pdf' | 'media'>('pdf');
@@ -148,6 +176,7 @@ export default function SoloFocusPage() {
       }, 1000);
     } else if (timeLeft === 0 && isActive) {
       setIsActive(false);
+      playCompletionChime();
       if (mode === 'FOCUS') {
         setCompletedSessions((c) => c + 1);
         supabase.rpc('award_pomodoro_credits', { p_room_id: '00000000-0000-0000-0000-000000000001' });
@@ -157,12 +186,23 @@ export default function SoloFocusPage() {
     return () => clearInterval(interval);
   }, [isActive, timeLeft, mode, supabase]);
 
+  const applyCustomMinutes = (customMins: number, newMode: 'FOCUS' | 'SHORT_BREAK' | 'LONG_BREAK' = 'FOCUS') => {
+    setMode(newMode);
+    setIsActive(false);
+    const secs = customMins * 60;
+    if (newMode === 'FOCUS') setFocusMinutes(customMins);
+    if (newMode === 'SHORT_BREAK') setShortBreakMinutes(customMins);
+    if (newMode === 'LONG_BREAK') setLongBreakMinutes(customMins);
+    setDuration(secs);
+    setTimeLeft(secs);
+  };
+
   const setTimerMode = (newMode: 'FOCUS' | 'SHORT_BREAK' | 'LONG_BREAK') => {
     setMode(newMode);
     setIsActive(false);
-    let sec = 1500;
-    if (newMode === 'SHORT_BREAK') sec = 300;
-    if (newMode === 'LONG_BREAK') sec = 900;
+    let sec = focusMinutes * 60;
+    if (newMode === 'SHORT_BREAK') sec = shortBreakMinutes * 60;
+    if (newMode === 'LONG_BREAK') sec = longBreakMinutes * 60;
     setDuration(sec);
     setTimeLeft(sec);
   };
@@ -281,7 +321,7 @@ export default function SoloFocusPage() {
                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                🧠 25m Focus
+                🧠 {focusMinutes}m Focus
               </button>
               <button
                 onClick={() => setTimerMode('SHORT_BREAK')}
@@ -291,7 +331,7 @@ export default function SoloFocusPage() {
                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                ☕ 5m Break
+                ☕ {shortBreakMinutes}m Break
               </button>
               <button
                 onClick={() => setTimerMode('LONG_BREAK')}
@@ -301,9 +341,104 @@ export default function SoloFocusPage() {
                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
-                🌴 15m Long
+                🌴 {longBreakMinutes}m Long
+              </button>
+
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`p-2 rounded-xl transition ${
+                  isSettingsOpen
+                    ? 'bg-zinc-800 text-orange-400'
+                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-white'
+                }`}
+                title="Customize Timer Durations"
+              >
+                <Sliders className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {/* Quick Focus Duration Presets */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {[15, 25, 45, 50, 60, 90].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => applyCustomMinutes(mins, 'FOCUS')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                    focusMinutes === mins && mode === 'FOCUS'
+                      ? 'bg-orange-500/20 border-orange-500/40 text-orange-600 dark:text-orange-400'
+                      : 'bg-zinc-100 dark:bg-white/[0.03] border-zinc-200 dark:border-white/5 text-zinc-500 hover:text-zinc-800 dark:hover:text-white'
+                  }`}
+                >
+                  {mins}m
+                </button>
+              ))}
+            </div>
+
+            {/* Expandable Custom Settings Panel */}
+            {isSettingsOpen && (
+              <div className="w-full p-4 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 space-y-3.5 text-left text-xs animate-in fade-in duration-200">
+                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-2 font-bold text-zinc-800 dark:text-zinc-200">
+                  <span className="flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5 text-orange-500" />
+                    Customize Pomodoro Stamina
+                  </span>
+                  <button
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="text-[10px] text-zinc-400 hover:text-white"
+                  >
+                    Done ✓
+                  </button>
+                </div>
+
+                {/* Focus Minutes Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300">
+                    <span>Focus Sprint Duration:</span>
+                    <span className="text-orange-500 font-mono font-black">{focusMinutes} min</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="120"
+                    value={focusMinutes}
+                    onChange={(e) => applyCustomMinutes(Number(e.target.value), 'FOCUS')}
+                    className="w-full accent-orange-500 h-1.5 bg-zinc-200 dark:bg-white/10 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* Short Break Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300">
+                    <span>Short Break Duration:</span>
+                    <span className="text-amber-500 font-mono font-black">{shortBreakMinutes} min</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={shortBreakMinutes}
+                    onChange={(e) => applyCustomMinutes(Number(e.target.value), 'SHORT_BREAK')}
+                    className="w-full accent-amber-500 h-1.5 bg-zinc-200 dark:bg-white/10 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* Long Break Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300">
+                    <span>Long Break Duration:</span>
+                    <span className="text-blue-500 font-mono font-black">{longBreakMinutes} min</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="60"
+                    value={longBreakMinutes}
+                    onChange={(e) => applyCustomMinutes(Number(e.target.value), 'LONG_BREAK')}
+                    className="w-full accent-blue-500 h-1.5 bg-zinc-200 dark:bg-white/10 rounded-lg cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Circular Countdown */}
             <div className="relative w-56 h-56 flex items-center justify-center">
@@ -345,7 +480,7 @@ export default function SoloFocusPage() {
                 className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-black text-xs shadow-lg shadow-orange-600/25 transition hover:scale-105"
               >
                 {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                <span>{isActive ? 'Pause Sprint' : 'Start Focus'}</span>
+                <span>{isActive ? 'Pause Sprint' : `Start Focus (${focusMinutes}m)`}</span>
               </button>
 
               <button

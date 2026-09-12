@@ -444,30 +444,49 @@ export default function VideoStudyRoomPage() {
           </div>
         </div>
 
-        {/* Center: Live Ticking Synchronized Pomodoro Clock */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 px-4 py-1.5 rounded-2xl shadow-inner">
-            <span className="text-xs text-zinc-400 uppercase font-black tracking-wider">
+        {/* Center: Live Ticking Synchronized Pomodoro Clock with Quick Custom Durations */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 px-3 sm:px-4 py-1.5 rounded-2xl shadow-inner">
+            <span className="text-[11px] sm:text-xs text-zinc-400 uppercase font-black tracking-wider">
               {pomodoroState === 'FOCUS' ? '🧠 Focus:' : '☕ Break:'}
             </span>
-            <span className="font-mono text-base font-black text-amber-400">
+            <span className="font-mono text-sm sm:text-base font-black text-amber-400">
               {formatTime(timeLeft)}
             </span>
           </div>
 
+          {/* Quick Custom Sprint Presets */}
+          <div className="hidden lg:flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/10">
+            {[15, 25, 45, 60].map((mins) => (
+              <button
+                key={mins}
+                onClick={() => startFocusSprint(mins * 60)}
+                className="px-2 py-1 rounded-lg text-[10px] font-bold text-zinc-300 hover:text-white hover:bg-white/10 transition"
+                title={`Start ${mins}m Focus Sprint for Room`}
+              >
+                {mins}m
+              </button>
+            ))}
+          </div>
+
           <button
-            onClick={() => startFocusSprint(1500)}
+            onClick={() => {
+              const custom = prompt('Enter custom sprint minutes (e.g. 15, 30, 45, 50, 90):', '25');
+              if (custom && !isNaN(Number(custom)) && Number(custom) > 0) {
+                startFocusSprint(Number(custom) * 60);
+              }
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-lg transition"
-            title="Restart 25m Focus Sprint"
+            title="Start Custom Duration Focus Sprint"
           >
             <Play className="w-3.5 h-3.5" />
-            <span>25m Focus</span>
+            <span>Sync Sprint</span>
           </button>
 
           <button
             onClick={() => startBreak(300)}
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/10 text-zinc-300 text-xs font-bold border border-white/10 transition"
-            title="Take 5m Break"
+            title="Take 5m Synchronized Break"
           >
             <Coffee className="w-3.5 h-3.5 text-amber-400" />
             <span>5m Break</span>
